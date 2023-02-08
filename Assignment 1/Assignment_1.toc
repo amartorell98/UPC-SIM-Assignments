@@ -1,0 +1,14 @@
+\contentsline {section}{Data loading}{1}{section*.2}%
+\contentsline {section}{Data preparation}{3}{section*.3}%
+\contentsline {subsection}{Data Quality and Profiling}{4}{section*.4}%
+\contentsline {subsection}{Univariate Descriptive Analysis}{5}{section*.5}%
+\contentsline {subsubsection}{Car Model}{5}{section*.6}%
+\contentsline {subsubsection}{Registration Year}{6}{section*.7}%
+\contentsline {subsubsection}{Price (£)}{7}{section*.8}%
+\contentsline {subsubsection}{Type of Gearbox}{8}{section*.9}%
+\contentsline {subsubsection}{Distance used}{9}{section*.10}%
+\contentsline {subsubsection}{Engine Fuel}{10}{section*.11}%
+\contentsline {subsubsection}{Road Tax}{11}{section*.12}%
+\contentsline {subsubsection}{Consumption in miles per gallon (mpg)}{12}{section*.13}%
+\contentsline {subsubsection}{Size in litres}{13}{section*.14}%
+\contentsline {section}{Questions}{14}{section*.15}%

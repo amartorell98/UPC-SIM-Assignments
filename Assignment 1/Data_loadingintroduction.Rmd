@@ -1,0 +1,125 @@
+---
+title: "Assignment 1"
+author: "Josep Franquet & Lidia Montero"
+date: "11/10/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data loading
+
+First, set working directory has to be fixed:
+
+```{r}
+setwd("~/Desktop/SIM/Assignment_car") #Set working directory
+```
+
+This data dictionary describes data  (https://www.kaggle.com/adityadesai13/used-car-dataset-ford-and-mercedes) - A sample of 5000 trips has been randomly selected from Mercedes, BMW, Volkwagen and Audi manufacturers. So, firstly you have to combine used car from the 4 manufacturers into 1 dataframe.
+
+The cars with engine size 0 are in fact electric cars, nevertheless Mercedes C class, and other given cars are not electric cars,so data imputation is requered. 
+
+
+  -   manufacturer	Factor: Audi, BMW, Mercedes or Volkswagen
+  -   model	Car model
+  -   year	registration year
+  -   price	price in £
+  -   transmission	type of gearbox
+  -   mileage	distance used
+  -   fuelType	engine fuel
+  -   tax	road tax
+  -   mpg	Consumption in miles per gallon   
+  -   engineSize	size in litres
+
+Data loading and union:
+
+```{r}
+# Lecture of DataFrames:
+df1 <- read.table("audi.csv",header=T, sep=",")
+df1$manufacturer <- "Audi"
+df2 <- read.table("bmw.csv",header=T, sep=",")
+df2$manufacturer <- "BMW"
+df3 <- read.table("merc.csv",header=T, sep=",")
+df3$manufacturer <- "Mercedes"
+df4 <- read.table("vw.csv",header=T, sep=",")
+df4$manufacturer <- "VW"
+
+# Union by row:
+df <- rbind(df1,df2,df3,df4)
+dim(df)  # Size of data.frame
+str(df) # Object class and description
+names(df) # List of variable names
+
+### Use birthday of 1 member of the group as random seed:
+set.seed(110600)
+# Random selection of x registers:
+sam<-as.vector(sort(sample(1:nrow(df),1000)))
+head(df)  # Take a look to the first rows/instances (6 rows)
+df<-df[sam,]  # Subset of rows _ It will be my sample
+summary(df)
+
+#Keep information in an .Rdata file:
+save(list=c("df"),file="MyOldCars-Raw.RData")
+
+```
+
+After all treatment, you should find a DataFrame with the following characteristics:
+
+```{r}
+# Clean workspace
+rm(list=ls())
+
+filepath<-"~/Desktop/SIM/Assignment_car/"
+#load(paste0(filepath,"MyOldCars-1000Clean.RData"))
+```
+
+Useful functions for the development of your assignment:
+
+```{r}
+# Some useful functions
+calcQ <- function(x) {
+  s.x <- summary(x)
+  iqr<-s.x[5]-s.x[2]
+  list(souti=s.x[2]-3*iqr, mouti=s.x[2]-1.5*iqr, min=s.x[1], q1=s.x[2], q2=s.x[3], 
+       q3=s.x[5], max=s.x[6], mouts=s.x[5]+1.5*iqr, souts=s.x[5]+3*iqr ) }
+
+countNA <- function(x) {
+  mis_x <- NULL
+  for (j in 1:ncol(x)) {mis_x[j] <- sum(is.na(x[,j])) }
+  mis_x <- as.data.frame(mis_x)
+  rownames(mis_x) <- names(x)
+  mis_i <- rep(0,nrow(x))
+  for (j in 1:ncol(x)) {mis_i <- mis_i + as.numeric(is.na(x[,j])) }
+  list(mis_col=mis_x,mis_ind=mis_i) }
+
+countX <- function(x,X) {
+  n_x <- NULL
+  for (j in 1:ncol(x)) {n_x[j] <- sum(x[,j]==X) }
+  n_x <- as.data.frame(n_x)
+  rownames(n_x) <- names(x)
+  nx_i <- rep(0,nrow(x))
+  for (j in 1:ncol(x)) {nx_i <- nx_i + as.numeric(x[,j]==X) }
+  list(nx_col=n_x,nx_ind=nx_i) }
+```
+
+Useful functions for your packages treatment:
+
+```{r message=FALSE, warning=FALSE}
+# Introduce required packages:
+requiredPackages <- c("effects","FactoMineR","car", "factoextra","RColorBrewer","ggplot2","dplyr","ggmap","ggthemes","knitr")
+
+#use this function to check if each package is on the local machine
+#if a package is installed, it will be loaded
+#if any are not, the missing package(s) will be installed and loaded
+package.check <- lapply(requiredPackages, FUN = function(x) {
+  if (!require(x, character.only = TRUE)) {
+    install.packages(x, dependencies = TRUE)
+    library(x, character.only = TRUE)
+  }
+})
+#verify they are loaded
+# search()
+```
+

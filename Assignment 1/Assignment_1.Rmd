@@ -1,0 +1,812 @@
+---
+title: 'Assignment 1: Car Prices'
+author: "Àlex Martorell Locascio & Irene Fernández Rebollo"
+date: "11/10/2021"
+output:
+  html_document:
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+    theme: united
+    highlight: tango
+  pdf_document:
+    toc: yes
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data loading
+
+First, set working directory has to be fixed:
+
+```{r, echo=FALSE}
+#setwd("~/SIM_CarPrices") #Set working directory
+#setwd("C:/Users/Alex/Desktop/UPC/1st Semester/Statistical Inference and Modelling/SIM_CarPrices")
+setwd("C:/Users/Alex/Desktop/UPC/AssignmentsUPC/SIM/Assignment 1")
+```
+
+This data dictionary describes data  (https://www.kaggle.com/adityadesai13/used-car-dataset-ford-and-mercedes) - A sample of 5000 trips has been randomly selected from Mercedes, BMW, Volkwagen and Audi manufacturers. So, firstly you have to combine used car from the 4 manufacturers into 1 dataframe.
+
+The cars with engine size 0 are in fact electric cars, nevertheless Mercedes C class, and other given cars are not electric cars,so data imputation is requered. 
+
+
+  -   manufacturer	Factor: Audi, BMW, Mercedes or Volkswagen
+  -   model	Car model
+  -   year	registration year
+  -   price	price in £
+  -   transmission	type of gearbox
+  -   mileage	distance used
+  -   fuelType	engine fuel
+  -   tax	road tax
+  -   mpg	Consumption in miles per gallon   
+  -   engineSize	size in litres
+
+Data loading and union:
+
+```{r, eval= FALSE, echo=TRUE}
+# Lecture of DataFrames:
+df1 <- read.table("audi.csv",header=T, sep=",")
+df1$manufacturer <- "Audi"
+df2 <- read.table("bmw.csv",header=T, sep=",")
+df2$manufacturer <- "BMW"
+df3 <- read.table("merc.csv",header=T, sep=",")
+df3$manufacturer <- "Mercedes"
+df4 <- read.table("vw.csv",header=T, sep=",")
+df4$manufacturer <- "VW"
+
+# Union by row:
+df <- rbind(df1,df2,df3,df4)
+dim(df)  # Size of data.frame
+str(df) # Object class and description
+names(df) # List of variable names
+
+### Use birthday of 1 member of the group as random seed:
+set.seed(130798)
+# Random selection of x registers:
+sam<-as.vector(sort(sample(1:nrow(df),5000)))
+head(df)  # Take a look to the first rows/instances (6 rows)
+df<-df[sam,]  # Subset of rows _ It will be my sample
+summary(df)
+
+#Keep information in an .Rdata file:
+save(list=c("df"),file="MyOldCars-Raw.RData")
+
+```
+
+
+Required packages:
+
+```{r message=FALSE, warning=FALSE}
+# Introduce required packages:
+
+requiredPackages <- c("car","lmtest", "FactoMineR","car", "factoextra","RColorBrewer","ggplot2","dplyr","knitr", "corrplot", "mvoutlier", "chemometrics", "MASS")
+
+
+#use this function to check if each package is on the local machine
+#if a package is installed, it will be loaded
+#if any are not, the missing package(s) will be installed and loaded
+package.check <- lapply(requiredPackages, FUN = function(x) {
+  if (!require(x, character.only = TRUE)) {
+    install.packages(x, dependencies = TRUE)
+    library(x, character.only = TRUE)
+  }
+})
+#verify they are loaded
+# search()
+```
+
+\newpage
+
+# Data preparation
+
+First, we load the raw data:
+
+```{r, echo=TRUE}
+# Clean workspace
+rm(list=ls())
+
+load(paste0("MyOldCars-Raw.RData"))
+
+summary(df)
+```
+
+\newpage
+## Data Quality and Profiling
+
+```{r, warning = FALSE}
+par(mfrow=c(1,1))
+
+dis <- Moutlier(df[, c(2:3, 5, 7:9)], quantile = 0.999, plot=F)
+plot(dis$md, dis$rd)
+text(dis$md,dis$rd,labels=rownames(df))
+abline(h=dis$cutoff, lwd=2, col="red")
+abline(v=dis$cutoff, lwd=2, col="red")
+
+list_mout <- which( ( dis$md > dis$cutoff ) & (dis$rd > dis$cutoff));
+length(list_mout)
+
+df <- df[-list_mout, ]
+
+
+count_na<-colSums(is.na(df))
+count_na
+```
+No NA's are recorded. We tried it multiple times with both our birthdays and no
+NA's were retrieved. The \texttt{colSums()} function helps us to identify NA's
+per column.
+
+With respect to univariate outliers, the analysis is left to the plots shown 
+below, as we choose the removal of outliers to be based on multivariate analysis.
+
+Regarding multivariate outliers, as explained in the lectures, Mahalanobis distance (MD from 
+now on) methods are applied. The Moutlier function is executed and a plot with MD and Robust MD
+on the axis is retrieved. The cutoff provided by the Moutlier function is used (set at 99.9%) and
+that gives a list of 167 multivariate outliers. They are removed from the data set, which will now have 4833 rows.
+
+For Data Profiling, we use the \texttt{condes()} function. More information 
+is found in Exercise 3. 
+
+
+## Univariate Descriptive Analysis
+
+### Car Model
+The car model is a qualitative variable, it has to be transformed to factor. There are 79 car models and the most popular is "Golf"; in the next plot, we can observe the number of cars for each model.
+```{r model, fig.height=10, fig.width=15}
+#summary(df$model)
+#head(df$model)
+#length(unique(df$model)) #79
+#nrow(df[is.na(df$model),]) #0
+df$model <- as.factor(df$model)
+ggplot(df,aes(x = forcats::fct_infreq(model), fill = manufacturer)) + 
+	geom_bar(stat = 'count', width = 0.8) + 
+	coord_flip() +
+  scale_y_continuous(expand = c(0, 0)) +
+  xlab("Car Model") + ylab("Number of cars") +
+  scale_fill_discrete(name = "Manufacturer") +
+  theme_minimal()
+```
+
+\newpage
+
+### Registration Year
+The registration year is a quantitative variable that goes from 1998 to 2020. The manufacturers have a similar distribution for this variable, with 2019 as the year with more registrations.
+```{r year, fig.height=8, fig.width=15}
+#summary(df$year)
+#head(df$year)
+table(df$year)
+#nrow(df[is.na(df$year),]) #0
+#boxplot(df$year, notch = TRUE)
+ggplot(df,aes(x = year)) +
+  geom_histogram(binwidth = 1, aes(y = ..density..), color = "black", fill = "white") +
+  geom_density(alpha=.3, fill="lightblue") +
+  facet_wrap(manufacturer ~ .) +
+  theme_bw()
+```
+
+\newpage
+
+### Price (£)
+Price is the numeric target of the project, their values goes from 1295£ to 135124£ with a mean of 21291£.
+```{r price, fig.height=8, fig.width=15}
+#summary(df$price)
+#head(df$price)
+#nrow(df[is.na(df$price),]) #0
+#boxplot(df$price, notch = TRUE)
+ggplot(df,aes(x = price)) +
+  geom_histogram(aes(y = ..density..), color = "black", fill = "white", bins = 30) +
+  geom_density(alpha=.2, fill="lightgreen") +
+  facet_wrap(manufacturer ~ .) +
+  theme_bw()
+```
+
+\newpage
+
+### Type of Gearbox
+The type of Gearbox is a qualitative variable with three possible categories: manual, semi-auto and automatic. More or less there are the same number of cars for the different transmissions. Highlight that VW has more manual cars compared with the other types of transmission, and that Mercedes has a lower number of manual cars compared with the rest of types.
+```{r transmission, fig.height=8, fig.width=15}
+#summary(df$transmission)
+#head(df$transmission)
+#nrow(df[is.na(df$transmission),]) #0
+#table(df$transmission)
+df$transmission <- factor(df$transmission, levels = c("Manual", "Semi-Auto", "Automatic"))
+ggplot(df, aes(x = transmission, fill = manufacturer)) + 
+  geom_bar(position = position_dodge()) +
+  xlab("Type of transmission") + ylab("Number of cars") +
+  scale_fill_discrete(name = "Manufacturer") +
+  annotate(geom = "text", x = 1, y = 1000, 
+           label = paste0("Manual = ", nrow(df[df$transmission == "Manual",]))) +
+  annotate(geom = "text", x = 2, y = 1000, 
+           label = paste0("Semi-Auto = ", nrow(df[df$transmission == "Semi-Auto",]))) +
+  annotate(geom = "text", x = 3, y = 1000, 
+           label = paste0("Automatic = ", nrow(df[df$transmission == "Automatic",]))) +
+  theme_bw()
+```
+
+\newpage
+
+### Distance used
+The distance used is a numerical varable that goes from 1 to 170000. Can be seen that as more distance used, less number of cars.
+```{r mileage, fig.height=8, fig.width=15}
+#summary(df$mileage)
+#head(df$mileage)
+#nrow(df[is.na(df$mileage),]) #0
+#boxplot(df$mileage, notch = TRUE)
+ggplot(df,aes(x = mileage)) +
+  geom_histogram(aes(y = ..density..), color = "black", fill = "white", bins = 30) +
+  geom_density(alpha=.2, fill="purple") +
+  facet_wrap(manufacturer ~ .) +
+  theme_bw()
+```
+
+\newpage
+
+### Engine Fuel
+Engine Fuel is a qualitative variable with 4 different types of fuel: petrol, diesel, hybrid and others. There are very few cars with the category hybrid or other fuel type and any cars for the Audi manufacturer.
+```{r fuelType, fig.height=8, fig.width=15}
+#summary(df$fuelType)
+#head(df$fuelType)
+#nrow(df[is.na(df$fuelType),]) #0
+#table(df$fuelType)
+df$fuelType <- factor(df$fuelType, levels = c("Petrol", "Diesel", "Hybrid", "Other"))
+ggplot(df, aes(x = fuelType, fill = manufacturer)) + 
+  geom_bar(position = position_dodge()) +
+  xlab("Type of fuel") + ylab("Number of cars") +
+  scale_fill_discrete(name = "Manufacturer") +
+  annotate(geom = "text", x = 1, y = 1000,
+           label = paste0("Petrol = ", nrow(df[df$fuelType == "Petrol",]))) +
+  annotate(geom = "text", x = 2, y = 1000,
+           label = paste0("Diesel = ", nrow(df[df$fuelType == "Diesel",]))) +
+  annotate(geom = "text", x = 3, y = 1000,
+           label = paste0("Hybrid = ", nrow(df[df$fuelType == "Hybrid",]))) +
+  annotate(geom = "text", x = 4, y = 1000,
+           label = paste0("Other = ", nrow(df[df$fuelType == "Other",]))) +
+  theme_bw()
+```
+
+\newpage
+
+### Road Tax
+The road tax is a quantitative variable that goes from 0 to 570. This variable has very different values, at this point cannot be seen any clear tendency.
+```{r tax, fig.height=8, fig.width=15}
+#summary(df$tax)
+#head(df$tax)
+#nrow(df[is.na(df$tax),]) #0
+#table(df$tax)
+#boxplot(df$tax)
+ggplot(df,aes(x = tax)) +
+  geom_histogram(binwidth = 20, aes(y = ..density..), color = "black", fill = "white") +
+  geom_density(alpha=.2, fill="purple") +
+  facet_wrap(manufacturer ~ .) +
+  theme_bw()
+```
+
+\newpage
+
+### Consumption in miles per gallon (mpg)
+The consumption is a numerical value that goes from 1.10mpg to 470.80mpg. This variable seems to follow a normal distribution, similar between manufacturers.
+```{r mpg, fig.height=8, fig.width=15}
+#summary(df$mpg)
+#head(df$mpg)
+#nrow(df[is.na(df$mpg),]) #0
+#boxplot(df$mpg)
+ggplot(df,aes(x = mpg)) +
+  geom_histogram(aes(y = ..density..), color = "black", fill = "white", bins = 30) +
+  geom_density(alpha=.2, fill="orange") +
+  facet_wrap(manufacturer ~ .) +
+  theme_bw()
+```
+
+\newpage
+
+### Size in litres
+The size in litres is the last quantitative variable that goes from 0 to 6.6. This variable has very different values, at this point cannot be seen any clear pattern.
+```{r engineSize, fig.height=8, fig.width=15}
+#summary(df$engineSize)
+#head(df$engineSize)
+#nrow(df[is.na(df$engineSize),]) #0
+#table(df$engineSize)
+#boxplot(df$engineSize)
+ggplot(df,aes(x = engineSize)) +
+  geom_histogram(binwidth = 0.1, aes(y = ..density..), color = "black", fill = "white") +
+  geom_density(alpha=.2, fill="orange") +
+  facet_wrap(manufacturer ~ .) +
+  theme_bw()
+```
+
+\newpage
+
+
+\newpage
+
+# Questions
+
+\textbf{1. Determine if the response variable (price) has an acceptably normal distribution. Address test to
+discard serial correlation.}
+
+```{r}
+acf(df$price)
+```
+If we plot the ACF function, we can see that some autocorrelation is shown 
+in the first 30 Lags, and it does seem significant.
+```{r}
+mm <- mean(df$price)
+ss <- sd(df$price)
+hist(df$price, freq = F)
+curve(dnorm(x, mm, ss), lwd=2, add=T, col="red")
+shapiro.test(df$price)
+``` 
+Also, we want to assess if the variable is normal. We proceed graphically and 
+The histogram of densities clearly does not seem to follow a normal distribution.
+The Shapiro-Wilk test returns a p-value of 0, which means we reject the null 
+hypothesis of normality. 
+
+\newpage
+
+\textbf{2. Indicate by exploration of the data which are apparently the variables most associated with the
+response variable (use only the indicated variables).}
+
+```{r}
+#names(df)
+#Quantitative variables:
+condes(df, 3)$quanti
+#Qualitative variables
+condes(df, 3)$quali
+```
+The most associated variables by exploration are year and engineSize for the quantitative variables and model for the qualitative variables. 
+\newline If we order qualitative variables by highest $correlation$ absolute value: $year > engineSize > mpg > mileage > tax$. 
+\newline If we order qualitative variables by highest $R^2$ absolute value: $model > transmission > manufacturer > fuelType$
+
+\newpage
+
+\textbf{3. Define a polytomic factor f.age for the covariate car age according to its quartiles and argue if
+the average price depends on the level of age. Statistically justify the answer.}
+
+```{r}
+maxyear<-max(df$year)
+
+q1<-quantile(maxyear - df$year)[2]
+q2<-quantile(maxyear - df$year)[3]
+q3<-quantile(maxyear - df$year)[4]
+
+df$f.age <- 0
+df$f.age[maxyear - df$year > q3 ] <-3
+df$f.age[maxyear - df$year <= q3  ] <-2
+df$f.age[maxyear - df$year <= q2 ] <-1
+df$f.age[maxyear - df$year <= q1 ] <-0
+df$f.age<-factor(df$f.age, labels=c("age-Q1", "age-Q2", "age-Q3", "age-Q4"))
+
+table(df$f.age)
+df$age<-maxyear - df$year
+
+Boxplot(df$price ~ df$f.age, id=list(labels=row.names(df)) , ylab="Price")
+```
+To create the factor that represents the car age based on the year quartile, the maximum  in the registration year variable is computed and the actual registration year is subtracted. This will give us the age of each car. 
+
+Once the factor is created, the boxplot clearly shows that the older the car, the lower the price.
+A significant number of outliers is also detected. 
+
+\newpage
+
+\textbf{4. Calculate and interpret the anova model that explains car price according to the age factor and the fuel type.}
+
+```{r}
+# We create a factor for Fuel Type
+
+df$f.fuelType <- 0
+df$f.fuelType[df$fuelType == "Petrol" ] <-1
+df$f.fuelType[df$fuelType == "Hybrid" ] <-2
+df$f.fuelType[df$fuelType == "Other" ] <-3
+df$f.fuelType <-factor(df$f.fuelType, labels=c("f.Diesel", "f.Petrol", "f.Hybrid", "f.Other"))
+
+table(df$f.fuelType)
+
+plot.design(df$price ~ df$f.age + df$f.fuelType) 
+r1 <- with(df, tapply(price, f.age, mean))
+r1
+r2 <- with(df, tapply(price, f.fuelType, mean))
+r2
+
+options(contrasts=c("contr.treatment", "contr.treatment"))
+
+m0 <- lm(price ~ 1, data=df)
+m1 <- lm(price ~ f.age*f.fuelType, data=df)
+m2 <- lm(price ~ f.age + f.fuelType, data=df)
+m3 <- lm(price ~ f.age, data=df)
+m4 <- lm(price ~ f.fuelType, data=df)
+
+#Interaction test
+with(df, interaction.plot(f.age, f.fuelType, price,
+                          col=c("red", "blue", "green", "orange"), lty = 1, lwd= 2))
+with(df, interaction.plot(f.fuelType, f.age, price,
+                          col=c("red", "blue", "green", "orange"), lty = 1, lwd= 2))
+
+anova(m2,m1)
+```
+
+We use the plot.design() function as a first approximation to our problem. It shows
+how the mean of the price is spread along both factors. It is noted that the 
+Car Age factor seems to explain better the variation in price than
+the fuel type but we have to keep in mind that this factor is constructed
+using quartiles.
+
+The First Interaction Plot shows some interaction between factors f.age and f.fuelType.
+Plus, both factors are significant (price varies according to fuel type and 
+resgistration year). However, we must assess if this interaction is significant enough.
+
+With regards to The Second Interaction Plot interaction between factors is also shown.
+
+A low p-value indicates that there is an interaction between factors. In our
+case, the p-value < 0.05 (1.045e-05), so we have to reject the null hypothesis and conclude that there exists interaction. Hence, from now on the interaction model will be considered. 
+(represented by m1)
+
+\newpage
+
+\textbf{5. Do you think that the variability of the price depends on both factors? Does the relation between price and age factor depend on fuel type?}
+
+```{r}
+
+anova (m0, m3)
+anova (m0, m4)
+
+
+anova(m4, m1)
+```
+Using One-way ANOVA on the null model (no difference between group means) and on the age and the fuelType model (respectively). This is to assess whether the price variable depends on both factors or not. $H_0$ is the null model. In both cases, the p-value is a lot less than 0.05, even closer to 0 in the age factor. So it seems that the price has a stronger dependence from age, which leads to the second question: 
+Whether the Fuel Type influences the relation between price and age factor. 
+There is a specific two-way ANOVA test that can be done on the model with factor fuelType and the additive model. The p-value is almost zero, so the conclusion is that the models are not equivalent ($H_0$ rejected) so the interaction model must be considered.
+
+\newpage
+
+\textbf{Note.} Questions 6 and 7 are joined.
+
+\textbf{6. Calculate the linear regression model that explains the price from the age: interpret the
+regression line and assess its quality.}
+
+\textbf{7. What is the percentage of the price variability that is explained by the age of the car?}
+```{r}
+lm1 <- lm(price ~ df$age , data = df)
+summary(lm1)
+plot(df$price ~ df$age ,pch=19,col="black")
+abline(lm1,col="red")
+
+par(mfrow=c(1,1))
+summary(lm1)
+
+par(mfrow = c(2,2))
+plot(lm1)
+
+par(mfrow=c(1,1))
+plot(lm1, which=5)
+bptest(lm1)
+```
+The first thing to notice is that the coefficients are well-estimated. The $R^2$ 
+is approximately 0.37, meaning that the Car Registration Year explains 37% of the price variable. The p-value for both parameters is zero, which means that the null
+hypothesis for $\beta_1 = 0$ and $\beta_2 = 0$ is rejected. 
+
+With regards to \textbf{Model diagnostics}:
+\begin{itemize}
+  
+  \item The residuals vs fitted values plot deviates 
+  notably from the mean 0 line. Some of the residuals are extremly large, and the     spread of the residuals is not the same, as the fitted value for the price is 
+  bigger, the residuals increase. This contradicts the constant variance hypothesis.
+
+  \item In the normal QQ Plot, the normal assumption seems to fit quite well until 
+  the quantiles are large: This means that the residuals for the fitted price         variable deviate from the normal assumption, as they are a lot larger than     
+  expected.
+
+  \item In the Scale-Location Plot, recall that it is an easier way of 
+  checking for homoskedasticity (constant variance). The difference between the 
+  Residuals v. Fitted Plot is that in this case the residuals are standardized.
+  The red line indicates the average magnitude of the std. residuals, which we
+  want it to be constant. The spread of the different magnitudes in residuals
+  gets larger as the fitted price is bigger.
+  
+  \item In the Residuals v. Leverage Plot, a further study into unsual 
+  observations is performed. As the leverage increases, the spread of the 
+  residuals decreases, indicating heteroskedasticity.
+  
+
+\end{itemize}
+The plots have definitely pointed out the heteroskedasticity of the model. The
+Breusch-Pagan Test returns a p-value to 0, therefore rejecting the $H_0$ for 
+homoskedasticity. 
+
+\textbf{Observation.} Looking at the plot of the regression line, it is easy to infer 
+the conclusions from the more detailed study given above: If the car is less old, 
+the price can be a lot higher, and the regression models fails to incorporate these values. This is why the residuals increase as the fitted value is higher.
+
+\newpage
+
+\textbf{8. Do you think it is necessary to introduce a quadratic term in the equation that relates the price
+to its age?}
+
+```{r}
+lm11 <- lm(price ~ age + I(age^2) , data = df)
+summary(lm11)
+```
+It does not seem extremely necessary because the Multiple R-square coefficient does not increase
+substantially (from 0.37 to 0.39).
+
+\newpage
+
+\textbf{9. Are there any additional explanatory numeric variables needed to the car price? Study
+collinearity effects.}
+```{r}
+
+round(cor(df[, c(2:3, 5, 7:9)]), 2)
+
+
+dfnum <- df[, c(2, 3, 5, 7:9)]
+
+m5 <- lm(price ~  1, data=dfnum)
+m5_forw_aic = step(m5,
+scope = price ~ tax + mileage + mpg + year + engineSize,
+direction = "forward", trace=0)
+
+summary(m5_forw_aic)
+vif(m5_forw_aic)
+
+
+```
+First, the correlation between numeric factors is revised using the cor function. All
+variables have a correlation of at least 0.44 with the price variable either negative or positive.
+This implies that the price is dependent on all of them. 
+
+\textit{Collinearity} is observed when a regressor is a function of the others. This can be seen 
+using the correlation table, as the correlation between co-linear variables would be close to 1.
+
+It is noted that no regressors are extremely correlated except ageg and mileage (0.79).
+
+The \texttt{step()} function is applied in order to search for the best model
+using explanatory numeric variables. This method is based on calculating the AIC
+and finding its lowest value. The AIC decreases as more variables are included 
+in the regression. The lowest value for AIC is when all the numerical variables
+are included.
+
+m5 is the result of the linear regression between the price and all numeric variables.The results
+are quite surprising: All parameters seem to be different from zero (as is shown with the low 
+p-values) and the F-statistic test returns 0 p-value which assesses that globally the model is good.
+
+It is noted that no regressors are extremely correlated except year and mileage (0.79)
+
+m5 is the result of the linear regression between the price and all numeric variables. The results are quite surprising: All paramaters seem to be different from zero (as is shown with the low p-values) and the F-statistic test returns 0 p-value which assesses that globally the model is good.
+
+The \texttt{vif()} function measures the \textit{Variance Inflation Factor} 
+(VIF from now on). This measure calculates
+the effect of the collinearity on the variance of the estimated $\beta_j$ 
+parameters. It depends on $R_j^2$ which we define as the coefficient that states
+the variation of a regressor $x_j$ explained by the other regressors. Since VIF is
+defined as:
+\begin{align*}
+  \frac{1}{1- R^2_j}
+\end{align*}
+if $R_j^2$ is large then the VIF is large. This means that $\beta_j$ varies 
+significantly. A common threshold is if VIF is larger than 5. In the model
+obtained by the step function, all regressors show a VIF smaller than 3, so 
+there is no cause for concern. 
+
+\newpage
+
+\textbf{10. After controlling by numerical variables, indicate whether the additive effect of the available factors on the price are statistically significant.}
+```{r}
+m6 <- lm(price ~  1, data=df)
+m6_forw_aic = step(m6,
+scope = price ~ model + transmission + mileage + fuelType + tax + mpg +
+                engineSize + manufacturer + f.age, direction = "both", trace=0)
+
+vif(m6_forw_aic)
+summary(m6_forw_aic)
+```
+We add the factors and apply the step function again. The best model (lowest AIC) 
+is with all the regressors except manufacturer. The Variance Inflation Factor
+is still low for most variables as shown.
+
+\newpage
+
+\textbf{11. Select the best model available so far. Interpret the equations that relate the explanatory variables to the answer (rate).}
+
+The best model is shown in exercise 10. We have 90 regressors, most of them
+are model categories. A high number of them have high p-values (close to 1) 
+which indicates not very good fitting. However, the $R^2$ statistic is 
+close to 1 which indicates that the variance of the price variable is well
+explained by the predictors. The F-statistic test returns a very low p-value
+which shows a good fitting overall.
+
+\newpage
+
+\textbf{12. Study the model that relates the logarithm of the price to the numerical variables.}
+```{r}
+logm1 <- lm(log(price) ~ ., data=dfnum)
+summary(logm1)
+
+bptest(logm1)
+
+logm2 <- lm(price ~ boxCoxVariable(price) + year + mileage + tax + mpg + engineSize, data=dfnum)
+summary(logm2)
+
+boxcox(price ~ ., data=dfnum)
+```
+This improves the fit of the model. If we apply a Box-Cox transformation 
+on the response variable, the ideal lambda value is $\lambda = 0.0926$
+This improves the R squared up to 0.8924, higher than with $\lambda = 0$, the
+natural logarithm transformation.
+
+\newpage
+
+\textbf{13. Once explanatory numerical variables are included in the model, are there any main effects from
+factors needed?}
+
+As it is shown in question 10, the factors help to explain more variance in 
+the response variable.
+```{r}
+m7 <- lm(price ~  1, data=df)
+m7_forw_aic = step(m7,
+scope = price ~ boxCoxVariable(price) + model + transmission + mileage + fuelType + tax + mpg +engineSize + manufacturer + f.age, direction = "both", trace=0)
+summary(m7_forw_aic)
+vif(m7_forw_aic)
+```
+Now, the model obtained is a combination from the results of questions 10 and 12,
+meaning that a transformation on the price variable is applied, as well as 
+the addition of the factors. The \texttt{step()} function returns the best model
+which has an $R^2 = 0.948$, the best so far. Overall, the model is good fit.
+The \texttt{vif()} function shows no major causes for concern.
+
+\newpage
+
+\textbf{14. Graphically assess the best model obtained so far.}
+```{r}
+par(mfrow=c(2,2))
+plot(m7_forw_aic)
+residualPlots(m7_forw_aic)
+```
+- Residuals vs. Leverage Plot: In the plot we can see the Cook's distance (dashed lines); in this case, there are no points outside this distance except the observations reported in the warning, this means that those observations are influential points since have leverage one.
+
+- Scale-Location Plot: This plot is used to check the homoscedasticity (equal variance) in the residuals of the model; in this case, the red line is more or less horizontal, which means that we can assume the equal variance for the residuals.
+
+- Normal Q-Q Plot: With this plot we can determine if the residuals follow a normal distribution; in this case, the residuals are well distributed along the diagonal line except some points in the tails that deviate from the line.
+
+- Residuals vs. Fitted Plot: This plot is used to determine if the residuals exhibit non-linear patterns; in this case, the red line is almost horizontal, so the linear regression model is appropriate for this dataset.
+
+In the residual Plots we see that most variables seem to have well behaved
+residuals.
+\newpage
+
+\textbf{15. Assess the presence of outliers in the studentized residuals at a 99% confidence level. Indicate
+what those observations are.}
+
+```{r, warning=FALSE}
+#qqPlot(m7_forw_aic, envelope = list(level = 0.99), labels=TRUE)
+
+# Outliers at 99% CI
+
+out1 <- which(studres(m6_forw_aic) < qt(0.005, 4742))
+out2 <- which(studres(m6_forw_aic) > qt(0.995, 4742))
+
+length(out1)
+length(out2)
+
+hist(rstudent(m6_forw_aic),freq=F)
+curve(dt(x, m6_forw_aic$df),col=2,add=T)
+```
+First, we obtain the studentized residuals and plot them. From the plot, we can observe that there are several points that we consider outliers at a 99% confidence level. \textbf{Note:} The \texttt{qqPlot()} is commented, because we have problems when we render the file.
+
+Also, in a more traditional way, we plot the t-student distribution and
+retrieve the outliers using a 99% CI. Counting the number of outliers we 
+get a total of 102.
+
+Finally, the plot of the histogram clearly shows the existence of such outliers.
+
+\newpage
+
+\textbf{16. Study the presence of a priori influential data observations, indicating their number according to the criteria studied in class.}
+```{r}
+hat <- hatvalues(m7_forw_aic)
+#Atypical values:
+length(hat[hat > 3*mean(hat)]) 
+out3 <- hat[hat > 3*mean(hat)]
+influencePlot(m7_forw_aic)
+abline(v=3*mean(hat), col="red")
+```
+The hat-value is a leverage measure to study priori influential data observations. In this case, we can observe the atypical values that are outside the interval marked by the vertical dashed lines; 246 in total.
+
+The threshold used appears in the Influence Plot. We note a large number of
+a priori influential data observations based on the hat values.
+
+\newpage
+
+\textbf{17. Study the presence of a posteriori influential values, indicating the criteria studied in class and the actual atypical observations.}
+```{r}
+cooks <- cooks.distance(m7_forw_aic)
+out4<-cooks[is.na(cooks)]
+
+#Influential:
+length(cooks[cooks > 1])
+
+```
+It is observed that exactly 5 observations have a Cook's Distance higher than 1.
+This means they are atypical observations and should be eliminated from 
+the model. 
+
+\newpage
+
+\textbf{18. Given a 5-year old car, the rest of numerical variables on the mean and factors on the reference level, what would be the expected price with a 95% confidence interval?}
+
+```{r}
+p <- data.frame(model=" 1 Series", f.age= df$f.age[4], engineSize = mean(df$engineSize),  mileage = mean(df$mileage), fuelType = "Diesel",  tax = mean(df$tax), mpg= mean(df$mpg), transmission = "Automatic")
+
+
+
+m8 <- lm(price ~  1, data=df)
+m8_forw_aic = step(m8,
+scope = log(price) ~  model + transmission + mileage + fuelType + tax + mpg +engineSize + manufacturer + f.age, direction = "both", trace=0)
+summary(m8_forw_aic)
+vif(m8_forw_aic)
+
+predict(m8_forw_aic, newdata=p, type="response", interval="confidence")
+
+dfnew <-df
+names(out1)
+dfnew <- dfnew[!row.names(dfnew) %in% names(out1),]
+length(out2)
+dfnew <- dfnew[!row.names(dfnew) %in% names(out2),]
+length(out3)
+dfnew <- dfnew[!row.names(dfnew) %in% names(out3),]
+length(out4)
+dfnew <- dfnew[!row.names(dfnew) %in% names(out4),]
+
+m9 <- lm(price ~  1, data=dfnew)
+m9_forw_aic = step(m9,
+scope = log(price) ~  model + transmission + mileage + fuelType + tax + mpg +engineSize + manufacturer + f.age, direction = "both", trace=0)
+summary(m9_forw_aic)
+vif(m9_forw_aic)
+
+predict(m9_forw_aic, newdata=p, type="response", interval="confidence", trace=0)
+``` 
+\text{Observation.} To simplify the equations, in this exercise we use
+models with the logarithm of the price only. 
+
+We note that if the car is 5 years old, the variable f.age is set to the
+last quantile. The reference factor levels are "1 Series" for the \texttt{model},
+Diesel for the \texttt{fuelType} and Automatic for the \texttt{transmission}
+variable. The rest is straightforward.
+
+We also want to consider the alternative in which we remove the different 
+outliers obtained in Questions 15, 16, 17, to see if the prediction varies 
+a lot. We end up removing all the outliers and retry the prediction (model m9).
+
+We observe differences in the results, as well as a smaller interval for the
+result in the m9 model.
+
+\newpage
+
+\textbf{19. Summarize what you have learned by working with this interesting real dataset.}
+
+This assignment has been very useful for us to apply the techniques learned in class in a real case. 
+
+We have been able to apply a linear regression model to this dataset, analyse the results, 
+calculate outliers, interpret residuals and try to improve the model. The important thing to note here is that since this is a real Data Science case 
+study, we started by searching for missing values and identifying outliers 
+in our data set. The removal of multivariate outliers will help to find
+a more fitting model. Also, we had a good picture of the variables in our
+data set thanks to the initial exploratory analysis.
+
+Different techniques and methods have been used during the whole project.
+The first part fas centered in the comparison between two factors (ANOVA). 
+Then, the rest of the project was focused on finding a compatible linear
+model that predicts the price as a function of its regressors. Different
+strategies were considered, as a real data set makes us realize how big the scope of the problem can be and how complicated it
+is to obtain the perfect model, the factors that we have to take into account and the different ways to manage them. Transformations were applied on the variables 
+to see if this helped improve the fitting of the linear model.
+
+Also, we dug deeper into the analysis of the results by interpreting the residuals using the graphical and mathematical tools available to us. This
+helps us to find a better model as some outliers may also be found in
+the residual analysis.
+
+
+
+
